@@ -71,8 +71,8 @@ type Delivery struct {
 }
 
 type Config struct {
-	eventStoreIP    string
-	eventStorePort  string
+	eventAPIIP      string
+	eventAPIPort    string
 	entityStoreIP   string
 	entityStorePort string
 }
@@ -420,20 +420,20 @@ func (m *Match) Get() (ok bool, err error) {
 
 // TODO: Test
 func mustGetConfig(c *Config) {
-	eaIP := os.Getenv("EVENTSTORE_IP")
+	eaIP := os.Getenv("EVENTAPI_IP")
 	if eaIP != "" {
-		c.eventStoreIP = eaIP
+		c.eventAPIIP = eaIP
 	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_IP"}).Info("Unable to find env var, using default `localhost`")
-		c.eventStoreIP = "localhost"
+		log.WithFields(log.Fields{"value": "EVENTAPI_IP"}).Info("Unable to find env var, using default `localhost`")
+		c.eventAPIIP = "localhost"
 	}
 
-	eaPort := os.Getenv("EVENTSTORE_PORT")
+	eaPort := os.Getenv("EVENTAPI_PORT")
 	if eaPort != "" {
-		c.eventStorePort = eaPort
+		c.eventAPIPort = eaPort
 	} else {
-		log.WithFields(log.Fields{"value": "EVENTSTORE_PORT"}).Info("Unable to find env var, using default `2113`")
-		c.eventStorePort = "4567"
+		log.WithFields(log.Fields{"value": "EVENTAPI_PORT"}).Info("Unable to find env var, using default `4567`")
+		c.eventAPIPort = "4567"
 
 	}
 
@@ -456,7 +456,7 @@ func mustGetConfig(c *Config) {
 }
 
 func (d *Delivery) Push() (ok bool, err error) {
-	etURL := fmt.Sprintf("http://%s:%s/event", c.eventStoreIP, c.eventStorePort)
+	etURL := fmt.Sprintf("http://%s:%s/event", c.eventAPIIP, c.eventAPIPort)
 	log.Debugf("Sending request to Event API at %s", etURL)
 	json, err := json.Marshal(d)
 	if err != nil {
