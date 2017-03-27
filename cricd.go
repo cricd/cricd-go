@@ -423,6 +423,8 @@ func mustGetConfig(c *Config) {
 	eaIP := os.Getenv("EVENTAPI_IP")
 	if eaIP != "" {
 		c.eventAPIIP = eaIP
+		log.WithFields(log.Fields{"value": eaIP}).Info("Found ENV var for event API IP")
+
 	} else {
 		log.WithFields(log.Fields{"value": "EVENTAPI_IP"}).Info("Unable to find env var, using default `localhost`")
 		c.eventAPIIP = "localhost"
@@ -431,6 +433,8 @@ func mustGetConfig(c *Config) {
 	eaPort := os.Getenv("EVENTAPI_PORT")
 	if eaPort != "" {
 		c.eventAPIPort = eaPort
+		log.WithFields(log.Fields{"value": eaPort}).Info("Found ENV var for event API port")
+
 	} else {
 		log.WithFields(log.Fields{"value": "EVENTAPI_PORT"}).Info("Unable to find env var, using default `4567`")
 		c.eventAPIPort = "4567"
@@ -440,6 +444,8 @@ func mustGetConfig(c *Config) {
 	etURL := os.Getenv("ENTITYSTORE_IP")
 	if etURL != "" {
 		c.entityStoreIP = etURL
+		log.WithFields(log.Fields{"value": etURL}).Info("Found ENV var for entity store IP")
+
 	} else {
 		log.WithFields(log.Fields{"value": "ENTITYSTORE_IP"}).Info("Unable to find env var, using default `localhost`")
 		c.entityStoreIP = "localhost"
@@ -448,6 +454,8 @@ func mustGetConfig(c *Config) {
 	etPort := os.Getenv("ENTITYSTORE_PORT")
 	if etPort != "" {
 		c.entityStorePort = etPort
+		log.WithFields(log.Fields{"value": etPort}).Info("Found ENV var for entity store port")
+
 	} else {
 		log.WithFields(log.Fields{"value": "ENTITYSTORE_PORT"}).Info("Unable to find env var, using default `1338`")
 		c.entityStorePort = "1338"
