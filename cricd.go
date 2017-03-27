@@ -457,8 +457,8 @@ func mustGetConfig(c *Config) {
 		log.WithFields(log.Fields{"value": etPort}).Info("Found ENV var for entity store port")
 
 	} else {
-		log.WithFields(log.Fields{"value": "ENTITYSTORE_PORT"}).Info("Unable to find env var, using default `1338`")
-		c.entityStorePort = "1338"
+		log.WithFields(log.Fields{"value": "ENTITYSTORE_PORT"}).Info("Unable to find env var, using default `1337`")
+		c.entityStorePort = "1337"
 	}
 
 }
