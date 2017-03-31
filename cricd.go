@@ -18,7 +18,6 @@ import (
 
 const DateFormat = "2006-01-02"
 
-var c Config
 var playerCache = cache.New(5*time.Minute, 30*time.Second)
 var teamCache = cache.New(5*time.Minute, 30*time.Second)
 var matchCache = cache.New(5*time.Minute, 30*time.Second)
@@ -26,6 +25,7 @@ var matchCache = cache.New(5*time.Minute, 30*time.Second)
 type Team struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
+	conf *Config
 }
 
 type Player struct {
@@ -33,6 +33,7 @@ type Player struct {
 	Name        string    `json:"name"`
 	DateOfBirth time.Time `json:"dateOfBirth"`
 	Gender      string    `json:"gender"`
+	conf        *Config
 }
 
 type Match struct {
@@ -42,6 +43,7 @@ type Match struct {
 	StartDate       time.Time `json:"startDate"`
 	NumberOfInnings int       `json:"numberOfInnings"`
 	LimitedOvers    int       `json:"limitedOvers"`
+	conf            *Config
 }
 
 type Innings struct {
@@ -50,31 +52,27 @@ type Innings struct {
 	FieldingTeam Team
 }
 
-type Delivery struct {
-	MatchID   int    `json:"match"`
-	EventType string `json:"eventType"`
-	Timestamp string `json:"timestamp"`
-	Ball      struct {
-		BattingTeam  Team `json:"battingTeam"`
-		FieldingTeam Team `json:"fieldingTeam"`
-		Innings      int  `json:"innings"`
-		Over         int  `json:"over"`
-		Ball         int  `json:"ball"`
-	} `json:"ball"`
-	Runs    int `json:"runs"`
-	Batsmen struct {
-		Striker    Player `json:"striker"`
-		NonStriker Player `json:"nonStriker"`
-	} `json:"batsmen"`
-	Bowler  Player  `json:"bowler"`
-	Fielder *Player `json:"fielder,omitempty"`
-}
-
+// Config defines the configuration required to use the cricd package
 type Config struct {
 	eventAPIIP      string
 	eventAPIPort    string
 	entityStoreIP   string
 	entityStorePort string
+	playersURL      string
+	teamsURL        string
+	matchesURL      string
+}
+
+// NewPlayer returns a new player, using the config provided or uses logical defaults
+func NewPlayer(c *Config) Player {
+	var p Player
+	if c != nil {
+		p.conf = c
+	} else {
+		p.conf = NewConfig()
+
+	}
+	return p
 }
 
 // TODO: Test me
@@ -102,14 +100,13 @@ func (p *Player) GetOrCreatePlayer() (ok bool, err error) {
 
 // TODO: Test me
 func (p *Player) Create() (ok bool, err error) {
-	etURL := fmt.Sprintf("http://%s:%s/players", c.entityStoreIP, c.entityStorePort)
 	params := url.Values{
 		"name": {p.Name},
 	}
 
-	log.Debugf("Sending request to create players to: %s", etURL)
+	log.Debugf("Sending request to create players to: %s", p.conf.playersURL)
 	log.Debugf("Using the following params to create players: %s", params)
-	res, err := http.PostForm(etURL, params)
+	res, err := http.PostForm(p.conf.playersURL, params)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to call create player endpoint")
 		return false, err
@@ -150,9 +147,7 @@ func (p *Player) Get() (ok bool, err error) {
 		p.ID = player.(Player).ID
 		return true, nil
 	}
-
-	etURL := fmt.Sprintf("http://%s:%s/players", c.entityStoreIP, c.entityStorePort)
-	req, err := http.NewRequest("GET", etURL, nil)
+	req, err := http.NewRequest("GET", p.conf.playersURL, nil)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to create request to get from players endpoint")
 		return false, err
@@ -207,16 +202,27 @@ func (p *Player) Get() (ok bool, err error) {
 
 }
 
+// NewTeam returns a new team, using the config provided or uses logical defaults
+func NewTeam(c *Config) Team {
+	var t Team
+	if c != nil {
+		t.conf = c
+	} else {
+		t.conf = NewConfig()
+
+	}
+	return t
+}
+
 // TODO: Test me
 func (t *Team) Create() (ok bool, err error) {
-	etURL := fmt.Sprintf("http://%s:%s/teams", c.entityStoreIP, c.entityStorePort)
 	params := url.Values{
 		"name": {t.Name},
 	}
 
-	log.Debugf("Sending request to create team to: %s", etURL)
+	log.Debugf("Sending request to create team to: %s", t.conf.teamsURL)
 	log.Debugf("Using the following params to create team: %s", params)
-	res, err := http.PostForm(etURL, params)
+	res, err := http.PostForm(t.conf.teamsURL, params)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to call create team endpoint")
 		return false, err
@@ -257,8 +263,7 @@ func (t *Team) Get() (ok bool, err error) {
 		t.ID = tm.(Team).ID
 		return true, nil
 	}
-	etURL := fmt.Sprintf("http://%s:%s/teams", c.entityStoreIP, c.entityStorePort)
-	req, err := http.NewRequest("GET", etURL, nil)
+	req, err := http.NewRequest("GET", t.conf.teamsURL, nil)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to get team from team endpoint")
 		return false, err
@@ -304,10 +309,21 @@ func (t *Team) Get() (ok bool, err error) {
 	}
 }
 
+// NewMatch returns a new match, using the config provided or uses logical defaults
+func NewMatch(c *Config) Match {
+	var m Match
+	if c != nil {
+		m.conf = c
+	} else {
+		m.conf = NewConfig()
+
+	}
+	return m
+}
+
 // TODO: Test me
 func (m *Match) Create() (ok bool, err error) {
 	log.Debugf("Creating match between %s and %s", m.HomeTeam, m.AwayTeam)
-	etURL := fmt.Sprintf("http://%s:%s/matches", c.entityStoreIP, c.entityStorePort)
 	params := url.Values{
 		"homeTeam":        {strconv.Itoa(m.HomeTeam.ID)},
 		"awayTeam":        {strconv.Itoa(m.AwayTeam.ID)},
@@ -316,9 +332,9 @@ func (m *Match) Create() (ok bool, err error) {
 		"startDate":       {m.StartDate.Format(DateFormat)},
 	}
 
-	log.Debugf("Sending request to create match to: %s", etURL)
+	log.Debugf("Sending request to create match to: %s", m.conf.matchesURL)
 	log.Debugf("Using the following params to create match: %s", params)
-	res, err := http.PostForm(etURL, params)
+	res, err := http.PostForm(m.conf.matchesURL, params)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to call create match endpoint")
 		return false, err
@@ -362,8 +378,7 @@ func (m *Match) Get() (ok bool, err error) {
 		return true, nil
 	}
 
-	etURL := fmt.Sprintf("http://%s:%s/matches", c.entityStoreIP, c.entityStorePort)
-	req, err := http.NewRequest("GET", etURL, nil)
+	req, err := http.NewRequest("GET", m.conf.matchesURL, nil)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to create request to get from match endpoint")
 	}
@@ -418,8 +433,9 @@ func (m *Match) Get() (ok bool, err error) {
 
 }
 
-// TODO: Test
-func mustGetConfig(c *Config) {
+// NewConfig returns a configuration instance and tries to get the values from ENV vars, otherwise sets it to logical defaults
+func NewConfig() *Config {
+	var c Config
 	eaIP := os.Getenv("EVENTAPI_IP")
 	if eaIP != "" {
 		c.eventAPIIP = eaIP
@@ -461,10 +477,55 @@ func mustGetConfig(c *Config) {
 		c.entityStorePort = "1337"
 	}
 
+	// Set up the endpoints
+	c.matchesURL = fmt.Sprintf("http://%s:%s/matches", c.entityStoreIP, c.entityStorePort)
+	log.Infof("Setting matches URL to: %s", c.matchesURL)
+
+	c.playersURL = fmt.Sprintf("http://%s:%s/players", c.entityStoreIP, c.entityStorePort)
+	log.Infof("Setting players URL to: %s", c.playersURL)
+
+	c.teamsURL = fmt.Sprintf("http://%s:%s/teams", c.entityStoreIP, c.entityStorePort)
+	log.Infof("Setting teams URL to: %s", c.teamsURL)
+
+	return &c
 }
 
+// NewDelivery returns a new match, using the config provided or uses logical defaults
+func NewDelivery(c *Config) Delivery {
+	var d Delivery
+	if c != nil {
+		d.conf = c
+	} else {
+		d.conf = NewConfig()
+
+	}
+	return d
+}
+
+type Delivery struct {
+	MatchID   int    `json:"match"`
+	EventType string `json:"eventType"`
+	Timestamp string `json:"timestamp"`
+	Ball      struct {
+		BattingTeam  Team `json:"battingTeam"`
+		FieldingTeam Team `json:"fieldingTeam"`
+		Innings      int  `json:"innings"`
+		Over         int  `json:"over"`
+		Ball         int  `json:"ball"`
+	} `json:"ball"`
+	Runs    int `json:"runs"`
+	Batsmen struct {
+		Striker    Player `json:"striker"`
+		NonStriker Player `json:"nonStriker"`
+	} `json:"batsmen"`
+	Bowler  Player  `json:"bowler"`
+	Fielder *Player `json:"fielder,omitempty"`
+	conf    *Config
+}
+
+// Push pushes a delivery to the Event API for persistence
 func (d *Delivery) Push() (ok bool, err error) {
-	etURL := fmt.Sprintf("http://%s:%s/event", c.eventAPIIP, c.eventAPIPort)
+	etURL := fmt.Sprintf("http://%s:%s/event", d.conf.eventAPIIP, d.conf.eventAPIPort)
 	log.Debugf("Sending request to Event API at %s", etURL)
 	json, err := json.Marshal(d)
 	if err != nil {
@@ -491,5 +552,13 @@ func (d *Delivery) Push() (ok bool, err error) {
 }
 
 func init() {
-	mustGetConfig(&c)
+	debug := os.Getenv("DEBUG")
+	if debug == "true" {
+		log.WithFields(log.Fields{"value": "DEBUG"}).Info("Setting log level to debug")
+		log.SetLevel(log.DebugLevel)
+	} else {
+		log.Info("Setting log level to info")
+		log.SetLevel(log.InfoLevel)
+	}
+	log.SetOutput(os.Stdout)
 }
