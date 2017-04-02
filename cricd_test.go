@@ -42,12 +42,13 @@ func TesNewConfigNotSet(t *testing.T) {
 }
 
 type PlayerEndpointTest struct {
-	name         string
-	input        Player
-	serverRes    []Player
-	serverResRaw string
-	output       Player
-	ok           bool
+	name          string
+	input         Player
+	serverRes     []Player
+	serverResRaw  string
+	serverResCode int
+	output        Player
+	ok            bool
 }
 
 func TestPlayer_Get(t *testing.T) {
@@ -96,6 +97,46 @@ func TestPlayer_Get(t *testing.T) {
 	}
 }
 
+func TestPlayer_Create(t *testing.T) {
+	os.Clearenv()
+	c := NewConfig()
+	var tst = []PlayerEndpointTest{
+		{
+			name:      "Bad Player",
+			input:     NewPlayer(c),
+			serverRes: []Player{},
+			output:    NewPlayer(c),
+			ok:        false},
+		{
+			name:      "Existing Player",
+			input:     Player{ID: 27, Name: "Ryan Scott", DateOfBirth: time.Date(1970, 1, 1, 1, 1, 1, 1, time.Local), Gender: "male", conf: c},
+			serverRes: []Player{},
+			output:    NewPlayer(c),
+			ok:        false},
+	}
+	var res []byte
+	serv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, string(res))
+	}))
+	defer serv.Close()
+
+	for _, ts := range tst {
+		// Set the response
+		if ts.serverResRaw == "" {
+			res, _ = json.Marshal(ts.serverRes)
+		} else {
+			res = []byte(ts.serverResRaw)
+		}
+		c.playersURL = serv.URL
+
+		ok, _ := ts.input.Create()
+
+		assert.Equal(t, ts.output, ts.input, "Expected player not received")
+		assert.Equal(t, ts.ok, ok, "Expected a false OK")
+	}
+
+}
+
 func TestPlayer_GetOrCreatePlayer(t *testing.T) {
 	type fields struct {
 		ID          int
@@ -132,73 +173,3 @@ func TestPlayer_GetOrCreatePlayer(t *testing.T) {
 		})
 	}
 }
-
-// func TestPlayer_Create(t *testing.T) {
-// 	type Player struct {
-// 		ID          int
-// 		Name        string
-// 		DateOfBirth time.Time
-// 		Gender      string
-// 		conf        *Config
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		player  Player
-// 		wantOk  bool
-// 		wantErr bool
-// 	}{
-// 	// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			p := &Player{
-// 				ID:          tt.fields.ID,
-// 				Name:        tt.fields.Name,
-// 				DateOfBirth: tt.fields.DateOfBirth,
-// 				Gender:      tt.fields.Gender,
-// 				conf:        tt.fields.conf,
-// 			}
-// 			gotOk, err := p.Create()
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("Player.Create() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if gotOk != tt.wantOk {
-// 				t.Errorf("Player.Create() = %v, want %v", gotOk, tt.wantOk)
-// 			}
-// 		})
-// 	}
-// }
-
-// func TestTeam_Create(t *testing.T) {
-// 	type fields struct {
-// 		ID   int
-// 		Name string
-// 		conf *Config
-// 	}
-// 	tests := []struct {
-// 		name    string
-// 		fields  fields
-// 		wantOk  bool
-// 		wantErr bool
-// 	}{
-// 	// TODO: Add test cases.
-// 	}
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			t := &Team{
-// 				ID:   tt.fields.ID,
-// 				Name: tt.fields.Name,
-// 				conf: tt.fields.conf,
-// 			}
-// 			gotOk, err := t.Create()
-// 			if (err != nil) != tt.wantErr {
-// 				t.Errorf("Team.Create() error = %v, wantErr %v", err, tt.wantErr)
-// 				return
-// 			}
-// 			if gotOk != tt.wantOk {
-// 				t.Errorf("Team.Create() = %v, want %v", gotOk, tt.wantOk)
-// 			}
-// 		})
-// 	}
-// }
