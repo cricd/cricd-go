@@ -536,7 +536,8 @@ func (d *Delivery) Push() (ok bool, err error) {
 	req.Header.Set("Content-Type", "application/json")
 	params := url.Values{}
 	params.Set("NextBall", "false")
-	client := &http.Client{Timeout: 2 * time.Second}
+	params.Set("Dedupe", "false")
+	client := &http.Client{Timeout: 1 * time.Second}
 
 	res, err := client.Do(req)
 	if err != nil {
