@@ -111,7 +111,7 @@ func TestPlayer_Create(t *testing.T) {
 			name:      "Existing Player",
 			input:     Player{ID: 27, Name: "Ryan Scott", DateOfBirth: time.Date(1970, 1, 1, 1, 1, 1, 1, time.Local), Gender: "male", conf: c},
 			serverRes: []Player{},
-			output:    NewPlayer(c),
+			output:    Player{ID: 27, Name: "Ryan Scott", DateOfBirth: time.Date(1970, 1, 1, 1, 1, 1, 1, time.Local), Gender: "male", conf: c},
 			ok:        false},
 	}
 	var res []byte
@@ -121,6 +121,7 @@ func TestPlayer_Create(t *testing.T) {
 	defer serv.Close()
 
 	for _, ts := range tst {
+		fmt.Printf("Running test: TestPlayer_Create-%s \n", ts.name)
 		// Set the response
 		if ts.serverResRaw == "" {
 			res, _ = json.Marshal(ts.serverRes)
@@ -131,7 +132,7 @@ func TestPlayer_Create(t *testing.T) {
 
 		ok, _ := ts.input.Create()
 
-		assert.Equal(t, ts.output, ts.input, "Expected player not received")
+		assert.Equal(t, ts.output, ts.input, "Expected player not received for")
 		assert.Equal(t, ts.ok, ok, "Expected a false OK")
 	}
 
