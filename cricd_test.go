@@ -31,7 +31,7 @@ func TestNewConfigSet(t *testing.T) {
 	assert.Equal(c.entityStorePort, "4567", "Failed to get ENTITYSTORE_PORT from ENV VAR")
 }
 
-func TesNewConfigNotSet(t *testing.T) {
+func TestNewConfigNotSet(t *testing.T) {
 	os.Clearenv()
 	assert := assert.New(t)
 	c := NewConfig()

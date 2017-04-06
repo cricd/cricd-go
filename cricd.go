@@ -159,7 +159,7 @@ func (p *Player) Get() (ok bool, err error) {
 	// Send request
 	log.Debugf("Sending request to get player to: %s", req.URL)
 
-	client := &http.Client{Timeout: 1 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to send request to get players endpoint")
@@ -275,7 +275,7 @@ func (t *Team) Get() (ok bool, err error) {
 	// Send request
 	log.Debugf("Sending request to get team to: %s", req.URL)
 
-	client := &http.Client{Timeout: 1 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to send request to get team endpoint")
@@ -393,7 +393,7 @@ func (m *Match) Get() (ok bool, err error) {
 	// Send request
 	log.Debugf("Sending request to get match to: %s", req.URL)
 
-	client := &http.Client{Timeout: 1 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to send request to get match endpoint")
@@ -408,7 +408,6 @@ func (m *Match) Get() (ok bool, err error) {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to read body from get match endpoint")
 		return false, err
 	}
-
 	var matches []Match
 	err = json.Unmarshal(body, &matches)
 	if err != nil {
@@ -535,9 +534,9 @@ func (d *Delivery) Push() (ok bool, err error) {
 	req, err := http.NewRequest("POST", etURL, bytes.NewBuffer(json))
 	req.Header.Set("Content-Type", "application/json")
 	params := url.Values{}
-	params.Set("NextBall", "false")
+	params.Set("NextEvent", "false")
 	params.Set("Dedupe", "false")
-	client := &http.Client{Timeout: 1 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second}
 
 	res, err := client.Do(req)
 	if err != nil {
