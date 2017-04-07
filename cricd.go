@@ -533,11 +533,12 @@ func (d *Delivery) Push() (ok bool, err error) {
 	}
 	req, err := http.NewRequest("POST", etURL, bytes.NewBuffer(json))
 	req.Header.Set("Content-Type", "application/json")
-	params := url.Values{}
-	params.Set("nextEvent", "false")
-	params.Set("dedupe", "false")
-	client := &http.Client{Timeout: 5 * time.Second}
+	q := req.URL.Query()
+	q.Add("nextEvent", "false")
+	q.Add("dedupe", "false")
+	req.URL.RawQuery = q.Encode()
 
+	client := &http.Client{Timeout: 5 * time.Second}
 	res, err := client.Do(req)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to send to event api")
