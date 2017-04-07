@@ -534,8 +534,8 @@ func (d *Delivery) Push() (ok bool, err error) {
 	req, err := http.NewRequest("POST", etURL, bytes.NewBuffer(json))
 	req.Header.Set("Content-Type", "application/json")
 	params := url.Values{}
-	params.Set("NextEvent", "false")
-	params.Set("Dedupe", "false")
+	params.Set("nextEvent", "false")
+	params.Set("dedupe", "false")
 	client := &http.Client{Timeout: 5 * time.Second}
 
 	res, err := client.Do(req)
