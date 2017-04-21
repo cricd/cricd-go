@@ -10,24 +10,29 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
 	cache "github.com/patrickmn/go-cache"
+	"github.com/xeipuuv/gojsonschema"
 )
-
-const DateFormat = "2006-01-02"
 
 var playerCache = cache.New(5*time.Minute, 30*time.Second)
 var teamCache = cache.New(5*time.Minute, 30*time.Second)
 var matchCache = cache.New(5*time.Minute, 30*time.Second)
 
+// DateFormat defines the agreed date format used in cricd
+const DateFormat = "2006-01-02"
+
+// Team defines a cricd Team
 type Team struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
 	conf *Config
 }
 
+// Player defines a person that exists within a cricd Team
 type Player struct {
 	ID          int       `json:"id"`
 	Name        string    `json:"name"`
@@ -36,6 +41,7 @@ type Player struct {
 	conf        *Config
 }
 
+// Match defines a cricket game between two cricd Teams
 type Match struct {
 	ID              int       `json:"id"`
 	HomeTeam        Team      `json:"homeTeam"`
@@ -46,6 +52,7 @@ type Match struct {
 	conf            *Config
 }
 
+// Innings defines an innings within a cricd Game
 type Innings struct {
 	Number       int
 	BattingTeam  Team
@@ -63,6 +70,35 @@ type Config struct {
 	matchesURL      string
 }
 
+// Ball defines the information about a ball
+type Ball struct {
+	BattingTeam  Team `json:"battingTeam"`
+	FieldingTeam Team `json:"fieldingTeam"`
+	Innings      int  `json:"innings"`
+	Over         int  `json:"over"`
+	Ball         int  `json:"ball"`
+}
+
+// Batsmen defines the batsmen currently playing cricket
+type Batsmen struct {
+	Striker    Player `json:"striker"`
+	NonStriker Player `json:"nonStriker"`
+}
+
+// Delivery defines an denormalised delivery in a cricd game
+type Delivery struct {
+	MatchID   int     `json:"match"`     // TODO: Expand this out to a match type
+	EventType string  `json:"eventType"` //TODO: Change this to an enum
+	Timestamp string  `json:"timestamp"`
+	Ball      Ball    `json:"ball"`
+	Runs      int     `json:"runs"`
+	Batsmen   Batsmen `json:"batsmen"`
+	Bowler    Player  `json:"bowler"`
+	Fielder   *Player `json:"fielder,omitempty"`
+	Batsman   *Player `json:"batsman,omitempty"`
+	conf      *Config
+}
+
 // NewPlayer returns a new player, using the config provided or uses logical defaults
 func NewPlayer(c *Config) Player {
 	var p Player
@@ -76,15 +112,18 @@ func NewPlayer(c *Config) Player {
 }
 
 // TODO: Test me
-func (p *Player) GetOrCreatePlayer() (ok bool, err error) {
-	k, e := p.Get()
+// GetOrCreatePlayer will first get a Player from the cricd entity store and if it does not exist it will create it.
+// It will associate this player to the team specified by the teamID
+// It returns the success of that operation and an error
+func (p *Player) GetOrCreatePlayer(teamID int) (ok bool, err error) {
+	k, e := p.Get(teamID)
 
 	if e != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to get player")
 		return false, err
 	}
 	if !k {
-		k, e := p.Create()
+		k, e := p.Create(teamID)
 		if e != nil {
 			log.WithFields(log.Fields{"error": err}).Error("Failed to create player")
 			return false, err
@@ -99,19 +138,27 @@ func (p *Player) GetOrCreatePlayer() (ok bool, err error) {
 }
 
 // TODO: Test me
-func (p *Player) Create() (ok bool, err error) {
+// Create will persist a Player to the entity store and associate it to a team
+// It returns the success of that operation and an error
+func (p *Player) Create(teamID int) (ok bool, err error) {
+
+	if teamID < 0 {
+		return false, fmt.Errorf("teamID provided is not above zero: %d", teamID)
+	}
+
 	params := url.Values{
 		"name": {p.Name},
 	}
 
-	log.Debugf("Sending request to create players to: %s", p.conf.playersURL)
+	playURL := strings.Replace(p.conf.playersURL, "{TEAM_ID}", strconv.Itoa(teamID), 1)
+	log.Debugf("Sending request to create players to: %s", playURL)
 	log.Debugf("Using the following params to create players: %s", params)
-	res, err := http.PostForm(p.conf.playersURL, params)
+	res, err := http.PostForm(playURL, params)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to call create player endpoint")
 		return false, err
 	}
-	if res.StatusCode != http.StatusCreated {
+	if res.StatusCode != http.StatusOK {
 		log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode}).Error("Got not OK response from creating player")
 		return false, fmt.Errorf("Got non OK status code when creating player: %d", res.StatusCode)
 	}
@@ -138,7 +185,13 @@ func (p *Player) Create() (ok bool, err error) {
 }
 
 // TODO: Test me
-func (p *Player) Get() (ok bool, err error) {
+// Get will retrieve a Player from the given team from the entity store team
+// It returns the success of that operation and an error
+func (p *Player) Get(teamID int) (ok bool, err error) {
+
+	if teamID < 0 {
+		return false, fmt.Errorf("teamID provided is not above zero: %d", teamID)
+	}
 
 	// Try hit the cache first
 	player, found := playerCache.Get(p.Name)
@@ -147,7 +200,9 @@ func (p *Player) Get() (ok bool, err error) {
 		p.ID = player.(Player).ID
 		return true, nil
 	}
-	req, err := http.NewRequest("GET", p.conf.playersURL, nil)
+
+	playURL := strings.Replace(p.conf.playersURL, "{TEAM_ID}", strconv.Itoa(teamID), 1)
+	req, err := http.NewRequest("GET", playURL, nil)
 	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to create request to get from players endpoint")
 		return false, err
@@ -183,9 +238,9 @@ func (p *Player) Get() (ok bool, err error) {
 
 	// More than one player we'll take the first
 	if len(t) > 1 {
-		log.WithFields(log.Fields{"players": len(t)}).Info("More than one team returned from get player endpoint, using the first")
+		log.WithFields(log.Fields{"players": len(t)}).Debug("More than one team returned from get player endpoint, using the first")
 		p.ID = t[0].ID
-		log.Infof("Got player with ID#: %d", p.ID)
+		log.Debugf("Got player with ID#: %d", p.ID)
 		playerCache.Set(t[0].Name, t[0], cache.DefaultExpiration)
 		return true, nil
 		// If there's exactly one, then we're good
@@ -196,7 +251,7 @@ func (p *Player) Get() (ok bool, err error) {
 		return true, nil
 	} else {
 		// Otherwise we didn't get anything
-		log.Info("Not returning any players from get player endpoint")
+		log.Debug("Not returning any players from get player endpoint")
 		return false, nil
 	}
 
@@ -215,6 +270,8 @@ func NewTeam(c *Config) Team {
 }
 
 // TODO: Test me
+// Create will persist a Team to the entity store
+// It returns the success of that operation and an error
 func (t *Team) Create() (ok bool, err error) {
 	params := url.Values{
 		"name": {t.Name},
@@ -255,6 +312,8 @@ func (t *Team) Create() (ok bool, err error) {
 }
 
 //TODO: Test me
+// Get will retrieve a Team to the entity store
+// It returns the success of that operation and an error
 func (t *Team) Get() (ok bool, err error) {
 	// Try hit the cache first
 	tm, found := teamCache.Get(t.Name)
@@ -294,7 +353,7 @@ func (t *Team) Get() (ok bool, err error) {
 	}
 	// If we got more than one team
 	if len(ct) > 1 {
-		log.WithFields(log.Fields{"teams": len(ct)}).Info("More than one team returned from  get team endpoint")
+		log.WithFields(log.Fields{"teams": len(ct)}).Debug("More than one team returned from  get team endpoint")
 		t.ID = ct[0].ID
 		teamCache.Set(ct[0].Name, ct[0], cache.DefaultExpiration)
 		return true, nil
@@ -304,7 +363,7 @@ func (t *Team) Get() (ok bool, err error) {
 		log.Debugf("Returning team from get team endpoint, ID#: %d Name: %s", t.ID, t.Name)
 		return true, nil
 	} else {
-		log.Info("Not returning any teams from get team endpoint")
+		log.Debug("Not returning any teams from get team endpoint")
 		return false, nil
 	}
 }
@@ -322,6 +381,8 @@ func NewMatch(c *Config) Match {
 }
 
 // TODO: Test me
+// Create will persist a Match to the entity store
+// It returns the success of that operation and an error
 func (m *Match) Create() (ok bool, err error) {
 	log.Debugf("Creating match between %s and %s", m.HomeTeam, m.AwayTeam)
 	params := url.Values{
@@ -367,6 +428,10 @@ func (m *Match) Create() (ok bool, err error) {
 }
 
 // TODO: Test me
+// Get will retrieve a Match to the entity store
+// It returns the success of that operation and an error
+// Get will retrieve a Match from the entity store
+// It returns the success of that operation and an error
 func (m *Match) Get() (ok bool, err error) {
 
 	// Try hit the cache first
@@ -416,7 +481,7 @@ func (m *Match) Get() (ok bool, err error) {
 	}
 
 	if len(matches) > 1 {
-		log.WithFields(log.Fields{"teams": len(matches)}).Info("More than one team returned from get match endpoint")
+		log.WithFields(log.Fields{"teams": len(matches)}).Debug("More than one team returned from get match endpoint")
 		m.ID = matches[0].ID
 		matchCache.Set(matchKey, matches[0], cache.DefaultExpiration)
 		return true, nil
@@ -480,7 +545,7 @@ func NewConfig() *Config {
 	c.matchesURL = fmt.Sprintf("http://%s:%s/matches", c.entityStoreIP, c.entityStorePort)
 	log.Debugf("Setting matches URL to: %s", c.matchesURL)
 
-	c.playersURL = fmt.Sprintf("http://%s:%s/players", c.entityStoreIP, c.entityStorePort)
+	c.playersURL = fmt.Sprintf("http://%s:%s/teams/{TEAM_ID}/players", c.entityStoreIP, c.entityStorePort)
 	log.Debugf("Setting players URL to: %s", c.playersURL)
 
 	c.teamsURL = fmt.Sprintf("http://%s:%s/teams", c.entityStoreIP, c.entityStorePort)
@@ -501,27 +566,6 @@ func NewDelivery(c *Config) Delivery {
 	return d
 }
 
-type Delivery struct {
-	MatchID   int    `json:"match"`
-	EventType string `json:"eventType"`
-	Timestamp string `json:"timestamp"`
-	Ball      struct {
-		BattingTeam  Team `json:"battingTeam"`
-		FieldingTeam Team `json:"fieldingTeam"`
-		Innings      int  `json:"innings"`
-		Over         int  `json:"over"`
-		Ball         int  `json:"ball"`
-	} `json:"ball"`
-	Runs    int `json:"runs"`
-	Batsmen struct {
-		Striker    Player `json:"striker"`
-		NonStriker Player `json:"nonStriker"`
-	} `json:"batsmen"`
-	Bowler  Player  `json:"bowler"`
-	Fielder *Player `json:"fielder,omitempty"`
-	conf    *Config
-}
-
 // Push pushes a delivery to the Event API for persistence
 func (d *Delivery) Push() (ok bool, err error) {
 	etURL := fmt.Sprintf("http://%s:%s/event", d.conf.eventAPIIP, d.conf.eventAPIPort)
@@ -531,24 +575,133 @@ func (d *Delivery) Push() (ok bool, err error) {
 		log.WithFields(log.Fields{"error": err}).Error("Failed to marshal delivery to json")
 		return false, err
 	}
-	req, err := http.NewRequest("POST", etURL, bytes.NewBuffer(json))
-	req.Header.Set("Content-Type", "application/json")
-	q := req.URL.Query()
-	q.Add("nextEvent", "false")
-	q.Add("dedupe", "false")
-	req.URL.RawQuery = q.Encode()
+	// Retry 5 times
+	interval := 2 * time.Second
+	for i := 0; i < 5; i++ {
+		// Create request
+		req, err := http.NewRequest("POST", etURL, bytes.NewBuffer(json))
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Error("Failed to create request to ES")
+			return false, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		q := req.URL.Query()
+		q.Add("nextEvent", "false")
+		q.Add("dedupe", "false")
+		req.URL.RawQuery = q.Encode()
+		client := &http.Client{Timeout: 5 * time.Second}
+		res, err := client.Do(req)
+		if err != nil {
+			log.WithFields(log.Fields{"error": err}).Errorf("Failed to send to event api, now retrying attempt %d/5", i+1)
+		} else if res.StatusCode != http.StatusCreated {
+			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode}).Errorf("Got not OK response from event API, now retrying attempt %d/5", i+1)
+			err = fmt.Errorf("Status code returned, not OK - %s", res.Status)
+		} else {
+			defer res.Body.Close()
+			return true, nil
+		}
+		time.Sleep(interval)
+		interval = interval * 2
+	}
+	return false, err
+}
 
-	client := &http.Client{Timeout: 5 * time.Second}
-	res, err := client.Do(req)
+func (d *Delivery) validateJSON() (ok bool, err error) {
+	e, err := json.Marshal(d)
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Error("Failed to send to event api")
+		// Handle errors
+		log.WithFields(log.Fields{"value": err}).Error("Unable to marshal event to JSON")
 		return false, err
 	}
-	if res.StatusCode != http.StatusCreated {
-		log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode}).Error("Got not OK response from event API")
-		return false, fmt.Errorf("Received a %d code - %s from event store api", res.StatusCode, res.Status)
+
+	s, err := ioutil.ReadFile("./event_schema.json")
+	if err != nil {
+		log.WithFields(log.Fields{"error": err}).Fatal("Unable to load json schema")
+		return false, err
 	}
-	defer res.Body.Close()
+	schemaLoader := gojsonschema.NewBytesLoader(s)
+	documentLoader := gojsonschema.NewStringLoader(string(e))
+	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
+	if err != nil {
+		log.WithFields(log.Fields{"value": err}).Fatal("Unable to validate json schema for event")
+		return false, err
+	}
+
+	if result.Valid() {
+		return true, nil
+	}
+	return false, nil
+}
+
+func (d *Delivery) validateLogic() (bool, error) {
+
+	//Shared rules
+	// Innings should be between 1 and 4 (depending on match type)
+	if (d.Ball.Innings < 1) || (d.Ball.Innings > 4) {
+		return false, fmt.Errorf("Innings should be between 1 and 4 but got: %d", d.Ball.Innings)
+	}
+	// Over should be <20 for T20 and <50 for one dayer
+
+	// Ball should be <6
+	if d.Ball.Ball > 6 {
+		return false, fmt.Errorf("Ball should be less than 6 but got: %d", d.Ball.Ball)
+	}
+
+	//Dismissals
+	switch d.EventType {
+	case "timedOut":
+		// TimedOut should have a batsman
+		if d.Batsman == nil {
+			return false, fmt.Errorf("TimedOut event must have a batsman")
+		}
+	case "caught":
+		// Caught should have a fielder
+		if d.Fielder == nil {
+			return false, fmt.Errorf("Caught event must have a fielder")
+		}
+	case "obstruction":
+		// Obstruction should have a batsman
+		if d.Batsman == nil {
+			return false, fmt.Errorf("Obstruction event must have a batsman")
+		}
+	case "runOut":
+		// RunOut should have a batsman
+		if d.Batsman == nil {
+			return false, fmt.Errorf("RunOut event must have a batsman")
+			// RunOut should have a fielder
+		} else if d.Fielder == nil {
+			return false, fmt.Errorf("RunOut event must have a fielder")
+		}
+	case "stumped":
+		// Stumped should have a fielder
+		if d.Fielder == nil {
+			return false, fmt.Errorf("Stumped event must have a fielder")
+		}
+
+	}
+	return true, nil
+}
+
+// Validate takes a cricd Delivery and ensure it complies to the defined cricd rules
+func (d *Delivery) Validate() (bool, error) {
+	ok, err := d.validateJSON()
+	if !ok {
+		log.Info("Not OK response when validating JSON for delivery")
+		return ok, err
+	} else if err != nil {
+		log.WithFields(log.Fields{"error": err}).Infof("Error encountered when validating JSON for delivery")
+		return ok, err
+	}
+
+	ok, err = d.validateLogic()
+	if !ok {
+		log.Info("Not OK response when validating logic for delivery")
+		return ok, err
+	} else if err != nil {
+		log.WithFields(log.Fields{"error": err}).Infof("Error encountered when validating logic for delivery")
+		return ok, err
+	}
+
 	return true, nil
 }
 
@@ -562,4 +715,8 @@ func init() {
 		log.SetLevel(log.InfoLevel)
 	}
 	log.SetOutput(os.Stdout)
+	if _, err := os.Stat("./event_schema.json"); os.IsNotExist(err) {
+		log.WithFields(log.Fields{"error": err}).Fatal("Unable to find JSON schema for event, expected at: ./event_schema.json")
+	}
+
 }

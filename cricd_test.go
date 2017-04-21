@@ -90,7 +90,7 @@ func TestPlayer_Get(t *testing.T) {
 		}
 		c.playersURL = serv.URL
 
-		ok, _ := ts.input.Get()
+		ok, _ := ts.input.Get(1)
 
 		assert.Equal(t, ts.output, ts.input, "Expected player not received")
 		assert.Equal(t, ts.ok, ok, "Expected a false OK")
@@ -130,7 +130,7 @@ func TestPlayer_Create(t *testing.T) {
 		}
 		c.playersURL = serv.URL
 
-		ok, _ := ts.input.Create()
+		ok, _ := ts.input.Create(1)
 
 		assert.Equal(t, ts.output, ts.input, "Expected player not received for")
 		assert.Equal(t, ts.ok, ok, "Expected a false OK")
@@ -163,13 +163,663 @@ func TestPlayer_GetOrCreatePlayer(t *testing.T) {
 				Gender:      tt.fields.Gender,
 				conf:        tt.fields.conf,
 			}
-			gotOk, err := p.GetOrCreatePlayer()
+			gotOk, err := p.GetOrCreatePlayer(1)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Player.GetOrCreatePlayer() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if gotOk != tt.wantOk {
 				t.Errorf("Player.GetOrCreatePlayer() = %v, want %v", gotOk, tt.wantOk)
+			}
+		})
+	}
+}
+
+func TestValidateLogic(t *testing.T) {
+	tests := []struct {
+		name    string
+		d       Delivery
+		wantOk  bool
+		wantErr bool
+	}{
+		{
+			name: "Good delivery",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "delivery",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+		{
+			name: "Too many innings",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "delivery",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 5,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+		{
+			name: "Too few innings",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "delivery",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 0,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+		{
+			name: "Too many balls",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "delivery",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    7,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+
+		{
+			name: "TimedOut without batsman",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "timedOut",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 0,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+		{
+			name: "TimedOut with batsman",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "timedOut",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Batsman: &Player{
+					ID:          1,
+					Name:        "John Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+
+		{
+			name: "Caught with fielder",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "caught",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Fielder: &Player{
+					ID:          1,
+					Name:        "John Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+
+		{
+			name: "Obstruction without batsman",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "obstruction",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+
+		{
+			name: "Obstruction with batsman",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "obstruction",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Batsman: &Player{
+					ID:          2,
+					Name:        "Jack Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+
+		{
+			name: "Runout without batsman or fielder",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "runOut",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+		{
+			name: "Runout with batsman and fielder",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "runOut",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Batsman: &Player{
+					ID:          2,
+					Name:        "Jack Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Fielder: &Player{
+					ID:          2,
+					Name:        "Jack Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+		{
+			name: "Stumped with fielder",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "stumped",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				Fielder: &Player{
+					ID:          2,
+					Name:        "Jack Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  true,
+			wantErr: false,
+		},
+		{
+			name: "Stumped without fielder",
+			d: Delivery{
+				MatchID:   1,
+				EventType: "stumped",
+				Timestamp: "2017-01-01",
+				Ball: Ball{
+					BattingTeam: Team{
+						ID:   1,
+						Name: "Australia",
+					},
+					FieldingTeam: Team{
+						ID:   2,
+						Name: "NZ",
+					},
+					Innings: 1,
+					Over:    1,
+					Ball:    1,
+				},
+				Runs: 1,
+				Batsmen: Batsmen{
+					Striker: Player{
+						ID:          1,
+						Name:        "John Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+					NonStriker: Player{
+						ID:          2,
+						Name:        "Jack Johnson",
+						DateOfBirth: time.Now(),
+						Gender:      "male",
+					},
+				},
+				Bowler: Player{
+					ID:          3,
+					Name:        "Jay Johnson",
+					DateOfBirth: time.Now(),
+					Gender:      "male",
+				},
+				conf: nil,
+			},
+			wantOk:  false,
+			wantErr: true,
+		},
+
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotOk, err := tt.d.validateLogic()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Delivery.validateLogic() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotOk != tt.wantOk {
+				t.Errorf("Delivery.validateLogic() = %v, want %v", gotOk, tt.wantOk)
 			}
 		})
 	}
