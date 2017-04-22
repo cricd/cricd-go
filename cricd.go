@@ -592,10 +592,17 @@ func (d *Delivery) Push() (ok bool, err error) {
 		client := &http.Client{Timeout: 5 * time.Second}
 		res, err := client.Do(req)
 		if err != nil {
-			log.WithFields(log.Fields{"error": err}).Errorf("Failed to send to event api, now retrying attempt %d/5", i+1)
-		} else if res.StatusCode != http.StatusCreated {
-			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode}).Errorf("Got not OK response from event API, now retrying attempt %d/5", i+1)
-			err = fmt.Errorf("Status code returned, not OK - %s", res.Status)
+			log.WithFields(log.Fields{"error": err}).Errorf("Failed to send to event api, not retrying")
+			return false, err
+		}
+		if res.StatusCode == http.StatusInternalServerError {
+			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": res.Body}).Errorf("Got not OK response from event API, now retrying attempt %d/5", i+1)
+			err = fmt.Errorf("Internal server error from event api - %s - %s", res.Status, res.Body)
+		} else if res.StatusCode == http.StatusBadRequest {
+			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": res.Body}).Errorf("Bad request reported from event API")
+			err = fmt.Errorf("Bad request reported from event api - %s - %s", res.Status, res.Body)
+			return false, err
+
 		} else {
 			defer res.Body.Close()
 			return true, nil
