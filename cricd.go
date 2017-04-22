@@ -628,21 +628,26 @@ func (d *Delivery) validateJSON() (ok bool, err error) {
 
 	s, err := ioutil.ReadFile("./event_schema.json")
 	if err != nil {
-		log.WithFields(log.Fields{"error": err}).Fatal("Unable to load json schema")
+		log.WithFields(log.Fields{"error": err}).Fatal("Unable to load JSON schema")
 		return false, err
 	}
 	schemaLoader := gojsonschema.NewBytesLoader(s)
 	documentLoader := gojsonschema.NewStringLoader(string(e))
 	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
 	if err != nil {
-		log.WithFields(log.Fields{"value": err}).Fatal("Unable to validate json schema for event")
+		log.WithFields(log.Fields{"error": err}).Error("Unable to validate JSON schema for event")
 		return false, err
 	}
 
 	if result.Valid() {
 		return true, nil
+	} else {
+		for _, err := range result.Errors() {
+			log.WithFields(log.Fields{"error": err.Description()}).Error("Failed to validate JSON schema with error")
+			return false, fmt.Errorf("JSON validation error: %s - %s", err.Description(), err.Value())
+		}
 	}
-	return false, nil
+	return true, nil
 }
 
 func (d *Delivery) validateLogic() (bool, error) {
@@ -697,23 +702,22 @@ func (d *Delivery) validateLogic() (bool, error) {
 // Validate takes a cricd Delivery and ensure it complies to the defined cricd rules
 func (d *Delivery) Validate() (bool, error) {
 	ok, err := d.validateJSON()
-	if !ok {
-		log.Info("Not OK response when validating JSON for delivery")
-		return ok, err
-	} else if err != nil {
+	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Infof("Error encountered when validating JSON for delivery")
+		return ok, err
+	} else if !ok {
+		log.Info("Not OK response when validating JSON for delivery")
 		return ok, err
 	}
 
 	ok, err = d.validateLogic()
-	if !ok {
-		log.Info("Not OK response when validating logic for delivery")
-		return ok, err
-	} else if err != nil {
+	if err != nil {
 		log.WithFields(log.Fields{"error": err}).Infof("Error encountered when validating logic for delivery")
 		return ok, err
+	} else if !ok {
+		log.Info("Not OK response when validating logic for delivery")
+		return ok, err
 	}
-
 	return true, nil
 }
 
