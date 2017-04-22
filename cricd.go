@@ -601,10 +601,10 @@ func (d *Delivery) Push() (ok bool, err error) {
 			return false, err
 		}
 		if res.StatusCode == http.StatusInternalServerError {
-			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": body}).Errorf("Got not OK response from event API, now retrying attempt %d/5", i+1)
+			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": string(body)}).Errorf("Got not OK response from event API, now retrying attempt %d/5", i+1)
 			err = fmt.Errorf("Internal server error from event api - %s - %s", res.Status, string(body))
 		} else if res.StatusCode == http.StatusBadRequest {
-			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": body}).Errorf("Bad request reported from event API")
+			log.WithFields(log.Fields{"response": res.Status, "code": res.StatusCode, "body": string(body)}).Errorf("Bad request reported from event API")
 			err = fmt.Errorf("Bad request reported from event api - %s - %s", res.Status, string(body))
 			return false, err
 
