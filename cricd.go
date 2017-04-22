@@ -659,10 +659,10 @@ func (d *Delivery) validateLogic() (bool, error) {
 	}
 	// Over should be <20 for T20 and <50 for one dayer
 
-	// Ball should be <6
-	if d.Ball.Ball > 6 {
+	// Ball should be <6 (REMOVED)
+	/* if d.Ball.Ball > 6 {
 		return false, fmt.Errorf("Ball should be less than 6 but got: %d", d.Ball.Ball)
-	}
+	}*/
 
 	//Dismissals
 	switch d.EventType {
@@ -670,11 +670,6 @@ func (d *Delivery) validateLogic() (bool, error) {
 		// TimedOut should have a batsman
 		if d.Batsman == nil {
 			return false, fmt.Errorf("TimedOut event must have a batsman")
-		}
-	case "caught":
-		// Caught should have a fielder
-		if d.Fielder == nil {
-			return false, fmt.Errorf("Caught event must have a fielder")
 		}
 	case "obstruction":
 		// Obstruction should have a batsman
